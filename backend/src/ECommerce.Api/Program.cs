@@ -1,6 +1,7 @@
 using System.Text;
 using ECommerce.Api.Data;
 using ECommerce.Api.Entities;
+using ECommerce.Api.Middleware;
 using ECommerce.Api.Security;
 using ECommerce.Api.Services;
 using ECommerce.Api.Swagger;
@@ -16,6 +17,9 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 var jwtKey = builder.Configuration["Jwt:Key"];
 if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Length < 32)
     throw new InvalidOperationException("Jwt:Key must be configured and at least 32 characters.");
+
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:5173" };
 
 builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlServer(connectionString));
 
@@ -45,12 +49,23 @@ builder.Services
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy(Policies.AdminOnly, policy => policy.RequireRole(Roles.Admin));
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy => policy
+        .WithOrigins(allowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod());
+});
+
+builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecurityTransformer>());
 
 var app = builder.Build();
 
 await DbSeeder.SeedAsync(app.Services);
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
@@ -63,6 +78,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("Frontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
