@@ -66,6 +66,7 @@ builder.Services.AddOpenApi(options => options.AddDocumentTransformer<BearerSecu
 var app = builder.Build();
 
 await DbSeeder.SeedAsync(app.Services);
+await CatalogSeeder.SeedAsync(app.Services);
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
