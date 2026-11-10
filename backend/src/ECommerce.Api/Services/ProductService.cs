@@ -84,7 +84,7 @@ public class ProductService : IProductService
             Description = request.Description.Trim(),
             Price = request.Price,
             StockQuantity = request.StockQuantity,
-            ImageUrl = request.ImageUrl?.Trim(),
+            ImageUrl = request.ImageUrl?.Trim() ?? string.Empty,
             CategoryId = category.Id,
             Category = category,
             IsActive = request.IsActive,
@@ -127,7 +127,7 @@ public class ProductService : IProductService
         product.Description = request.Description.Trim();
         product.Price = request.Price;
         product.StockQuantity = request.StockQuantity;
-        product.ImageUrl = request.ImageUrl?.Trim();
+        product.ImageUrl = request.ImageUrl?.Trim() ?? string.Empty;
         product.CategoryId = category.Id;
         product.Category = category;
         product.IsActive = request.IsActive;
