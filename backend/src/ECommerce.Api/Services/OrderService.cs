@@ -12,6 +12,7 @@ public interface IOrderService
     Task<List<OrderSummaryResponse>> ListForUserAsync(int userId);
     Task<OrderResponse> GetForUserAsync(int userId, int orderId);
     Task<OrderResponse> CancelForUserAsync(int userId, int orderId);
+    Task<OrderResponse> CancelAsAdminAsync(int orderId);
 }
 
 public class OrderService : IOrderService
@@ -136,6 +137,9 @@ public class OrderService : IOrderService
     public Task<OrderResponse> CancelForUserAsync(int userId, int orderId) =>
         CancelCoreAsync(orderId, userId);
 
+    public Task<OrderResponse> CancelAsAdminAsync(int orderId) =>
+        CancelCoreAsync(orderId, null);
+
     // userId = null means "admin" (no ownership filter); reused in the admin step.
     private async Task<OrderResponse> CancelCoreAsync(int orderId, int? userId)
     {
@@ -181,7 +185,7 @@ public class OrderService : IOrderService
         return $"ORD-{now:yyyyMMdd}-{new string(chars)}";
     }
 
-    private static OrderResponse Map(Order o) => new()
+    internal static OrderResponse Map(Order o) => new()
     {
         Id = o.Id,
         OrderNumber = o.OrderNumber,
