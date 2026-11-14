@@ -1,4 +1,4 @@
-using ECommerce.Api.Entities;
+﻿using ECommerce.Api.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace ECommerce.Api.Data;
@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<User> Users => Set<User>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<Cart> Carts => Set<Cart>();
     public DbSet<CartItem> CartItems => Set<CartItem>();
     public DbSet<Order> Orders => Set<Order>();
@@ -52,6 +53,12 @@ public class AppDbContext : DbContext
                 .WithMany(c => c.Products)
                 .HasForeignKey(x => x.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ProductImage>(e =>
+        {
+            e.Property(x => x.ContentType).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Data).IsRequired();
         });
 
         modelBuilder.Entity<Cart>(e =>

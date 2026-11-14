@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using ECommerce.Api.Data;
 using ECommerce.Api.Entities;
 using ECommerce.Api.Middleware;
@@ -31,6 +31,7 @@ builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IAdminOrderService, AdminOrderService>();
 builder.Services.AddScoped<IStatsService, StatsService>();
+builder.Services.AddScoped<IImageService, ImageService>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
