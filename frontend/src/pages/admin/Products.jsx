@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Package, Plus, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import {
   useAdminProducts,
-  useDeactivateAdminProduct,
+  useDeleteAdminProduct,
   useUpdateAdminProduct,
 } from '../../hooks/useAdmin.js'
 import { useCategories } from '../../hooks/useCategories.js'
@@ -34,16 +34,24 @@ export function AdminProducts() {
 
   const [searchInput, setSearchInput] = useState(urlSearch)
   const debouncedSearch = useDebounce(searchInput, 400)
+  const isTypingRef = useRef(false)
   const [deactivateTarget, setDeactivateTarget] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [activatingId, setActivatingId] = useState(null)
 
   useEffect(() => {
     setSearchInput(urlSearch)
+    isTypingRef.current = false
   }, [urlSearch])
 
   useEffect(() => {
+    if (!isTypingRef.current) return
     if (debouncedSearch !== searchInput) return
-    if (debouncedSearch.trim() === urlSearch.trim()) return
+    if (debouncedSearch.trim() === urlSearch.trim()) {
+      isTypingRef.current = false
+      return
+    }
+    isTypingRef.current = false
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
       if (debouncedSearch.trim()) next.set('search', debouncedSearch.trim())
@@ -65,8 +73,8 @@ export function AdminProducts() {
     pageSize: 12,
   })
 
-  const deactivateProduct = useDeactivateAdminProduct()
   const updateProduct = useUpdateAdminProduct()
+  const deleteProduct = useDeleteAdminProduct()
 
   function updateParams(mutator) {
     setSearchParams((prev) => {
@@ -76,10 +84,31 @@ export function AdminProducts() {
     })
   }
 
-  async function handleConfirmDeactivate() {
-    if (!deactivateTarget || deactivateProduct.isPending) return
+  async function handleConfirmDelete() {
+    if (!deleteTarget || deleteProduct.isPending) return
     try {
-      await deactivateProduct.mutateAsync(deactivateTarget.id)
+      await deleteProduct.mutateAsync(deleteTarget.id)
+      setDeleteTarget(null)
+    } catch {
+      setDeleteTarget(null)
+    }
+  }
+
+  async function handleConfirmDeactivate() {
+    if (!deactivateTarget || updateProduct.isPending) return
+    try {
+      await updateProduct.mutateAsync({
+        id: deactivateTarget.id,
+        name: deactivateTarget.name,
+        description: deactivateTarget.description,
+        price: deactivateTarget.price,
+        stockQuantity: deactivateTarget.stockQuantity,
+        imageUrl: deactivateTarget.imageUrl || '',
+        categoryId: deactivateTarget.categoryId,
+        isActive: false,
+        rowVersion: deactivateTarget.rowVersion,
+      })
+      toast.success('Product deactivated', { id: 'product-saved' })
       setDeactivateTarget(null)
     } catch {
       setDeactivateTarget(null)
@@ -143,7 +172,10 @@ export function AdminProducts() {
               id="admin-products-search"
               type="search"
               value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
+              onChange={(e) => {
+                isTypingRef.current = true
+                setSearchInput(e.target.value)
+              }}
               placeholder="Search by product name..."
               className="h-11 w-full rounded-[8px] border border-border-strong bg-surface pl-9 pr-3 text-base sm:text-sm text-ink placeholder:text-muted focus:border-primary"
             />
@@ -297,6 +329,13 @@ export function AdminProducts() {
                                 {activatingId === product.id ? 'Activating...' : 'Activate'}
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(product)}
+                              className="text-sm font-semibold text-danger hover:underline cursor-pointer"
+                            >
+                              Delete
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -365,7 +404,7 @@ export function AdminProducts() {
                     </div>
                   </dl>
 
-                  <div className="flex items-center gap-3 border-t border-border pt-3">
+                  <div className="flex items-center gap-2 border-t border-border pt-3">
                     <Link to={`/admin/products/${product.id}/edit`} className="flex-1">
                       <Button variant="secondary" size="sm" fullWidth>
                         Edit
@@ -374,7 +413,7 @@ export function AdminProducts() {
                     {product.isActive ? (
                       <Button
                         type="button"
-                        variant="destructive"
+                        variant="secondary"
                         size="sm"
                         className="flex-1"
                         onClick={() => setDeactivateTarget(product)}
@@ -393,6 +432,15 @@ export function AdminProducts() {
                         Activate
                       </Button>
                     )}
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setDeleteTarget(product)}
+                    >
+                      Delete
+                    </Button>
                   </div>
                 </article>
               )
@@ -415,13 +463,13 @@ export function AdminProducts() {
         open={Boolean(deactivateTarget)}
         onClose={() => setDeactivateTarget(null)}
         title="Deactivate product?"
-        preventClose={deactivateProduct.isPending}
+        preventClose={updateProduct.isPending}
         footer={
           <>
             <Button
               type="button"
               variant="secondary"
-              disabled={deactivateProduct.isPending}
+              disabled={updateProduct.isPending}
               onClick={() => setDeactivateTarget(null)}
             >
               Cancel
@@ -429,7 +477,7 @@ export function AdminProducts() {
             <Button
               type="button"
               variant="destructive-solid"
-              loading={deactivateProduct.isPending}
+              loading={updateProduct.isPending}
               onClick={handleConfirmDeactivate}
             >
               Deactivate
@@ -440,6 +488,39 @@ export function AdminProducts() {
         <p className="text-sm text-ink">
           <span className="font-semibold">{deactivateTarget?.name}</span> will be hidden from the
           storefront. Existing orders remain unaffected and you can activate it again anytime.
+        </p>
+      </Modal>
+
+      <Modal
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete product?"
+        preventClose={deleteProduct.isPending}
+        footer={
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={deleteProduct.isPending}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive-solid"
+              loading={deleteProduct.isPending}
+              onClick={handleConfirmDelete}
+            >
+              Delete
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink">
+          Are you sure you want to permanently delete{' '}
+          <span className="font-semibold">{deleteTarget?.name}</span>? This action cannot be
+          undone.
         </p>
       </Modal>
     </div>

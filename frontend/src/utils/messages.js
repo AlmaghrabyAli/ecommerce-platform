@@ -21,9 +21,18 @@ const EXACT_MESSAGES = {
   'A category with this name already exists.': 'A category with this name already exists.',
   'Cannot delete a category that still has products.':
     "This category still has products (including inactive ones), so it can't be deleted.",
+  'Only JPEG, PNG or WebP images are allowed.': 'Only JPEG, PNG or WebP images are allowed.',
+  'Image must be 2 MB or smaller.': 'Image must be 2 MB or smaller.',
+  'The image file is empty.': 'The selected file is empty.',
+  'The file field is required.': 'Please choose an image file.',
+  'Image not found.': 'This image could not be found.',
 }
 
 const PATTERN_MESSAGES = [
+  {
+    regex: /Request body too large/i,
+    format: () => 'Image must be 2 MB or smaller.',
+  },
   {
     regex: /^Only (\d+) item\(s\) in stock\.$/,
     format: (m) => `Only ${m[1]} left in stock.`,

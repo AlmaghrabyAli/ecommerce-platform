@@ -3,9 +3,6 @@ import { getToken } from '../utils/storage.js'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5062/api',
-  headers: {
-    'Content-Type': 'application/json',
-  },
 })
 
 let unauthorizedHandler = null

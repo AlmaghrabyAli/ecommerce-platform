@@ -48,7 +48,7 @@ describe('Routing, guards, redirects, and document titles', () => {
   })
 
   it('AdminRoute blocks customers with Forbidden and allows admins into Dashboard', async () => {
-    renderWithProviders(null, {
+    const first = renderWithProviders(null, {
       route: '/admin',
       role: 'customer',
       withRoutes: true,
@@ -58,6 +58,8 @@ describe('Routing, guards, redirects, and document titles', () => {
       await screen.findByRole('heading', { name: "You don't have access to this page" }),
     ).toBeInTheDocument()
     expect(document.title).toBe('Access denied | Bazaaro')
+
+    first.unmount()
 
     renderWithProviders(null, {
       route: '/admin',
@@ -70,12 +72,14 @@ describe('Routing, guards, redirects, and document titles', () => {
   })
 
   it('Auth pages redirect already signed-in customers to / and admins to /admin', async () => {
-    renderWithProviders(null, {
+    const first = renderWithProviders(null, {
       route: '/login',
       role: 'customer',
       withRoutes: true,
     })
     expect(await screen.findByRole('heading', { name: /Everything you need/i })).toBeInTheDocument()
+
+    first.unmount()
 
     renderWithProviders(null, {
       route: '/register',

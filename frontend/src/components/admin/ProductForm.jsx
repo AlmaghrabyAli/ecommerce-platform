@@ -1,50 +1,72 @@
 import { useEffect, useRef, useState } from 'react'
 import { Controller, useForm } from 'react-hook-form'
-import { ImagePlus, Trash2 } from 'lucide-react'
+import { AlertCircle, ImagePlus, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useUploadProductImage } from '../../hooks/useAdmin.js'
 import { parseApiError } from '../../utils/errors.js'
 import { ProductImage } from '../product/ProductImage.jsx'
 import { Alert } from '../ui/Alert.jsx'
 import { Button } from '../ui/Button.jsx'
 import { Input } from '../ui/Input.jsx'
 import { Select } from '../ui/Select.jsx'
+import { Spinner } from '../ui/Spinner.jsx'
 import { Textarea } from '../ui/Textarea.jsx'
 import { Toggle } from '../ui/Toggle.jsx'
 
-async function createPreviewImageUrl(file) {
-  const objectUrl = URL.createObjectURL(file)
-  if (typeof document === 'undefined') return objectUrl
+function fileToImage(file) {
+  return new Promise((resolve, reject) => {
+    if (typeof FileReader === 'undefined') {
+      return reject(new Error('FileReader not available'))
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = reject
+      img.src = reader.result
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+async function shrinkImageIfNeeded(file) {
+  if (!file || file.size <= 500 * 1024) {
+    return file
+  }
+
+  if (typeof document === 'undefined') {
+    return file
+  }
 
   try {
-    const img = await new Promise((resolve, reject) => {
-      const el = new Image()
-      el.onload = () => resolve(el)
-      el.onerror = reject
-      el.src = objectUrl
-    })
-
-    const maxDim = 800
-    const scale = Math.min(1, maxDim / Math.max(img.width || maxDim, img.height || maxDim))
-    const width = Math.max(1, Math.round((img.width || maxDim) * scale))
-    const height = Math.max(1, Math.round((img.height || maxDim) * scale))
-
     const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext ? canvas.getContext('2d') : null
+    if (!ctx) return file
+
+    const img = await fileToImage(file)
+    const maxDim = 800
+    const originalWidth = img.width || maxDim
+    const originalHeight = img.height || maxDim
+    const scale = Math.min(1, maxDim / Math.max(originalWidth, originalHeight))
+    const width = Math.max(1, Math.round(originalWidth * scale))
+    const height = Math.max(1, Math.round(originalHeight * scale))
+
     canvas.width = width
     canvas.height = height
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return objectUrl
 
     ctx.fillStyle = '#FFFFFF'
     ctx.fillRect(0, 0, width, height)
     ctx.drawImage(img, 0, 0, width, height)
 
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.86))
-    if (!blob) return objectUrl
+    if (typeof canvas.toBlob !== 'function') return file
 
-    URL.revokeObjectURL(objectUrl)
-    return URL.createObjectURL(blob)
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.86))
+    if (!blob) return file
+
+    return new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
   } catch {
-    return objectUrl
+    return file
   }
 }
 
@@ -58,8 +80,11 @@ export function ProductForm({
 }) {
   const isEdit = Boolean(initialProduct)
   const [bannerError, setBannerError] = useState(null)
-  const [processingImage, setProcessingImage] = useState(false)
+  const [imageError, setImageError] = useState(null)
   const fileInputRef = useRef(null)
+
+  const uploadImageMutation = useUploadProductImage()
+  const isUploadingImage = uploadImageMutation.isPending
 
   const {
     register,
@@ -84,6 +109,7 @@ export function ProductForm({
 
   useEffect(() => {
     setBannerError(null)
+    setImageError(null)
     reset({
       name: initialProduct?.name || '',
       description: initialProduct?.description || '',
@@ -103,25 +129,42 @@ export function ProductForm({
     e.target.value = ''
     if (!file) return
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select a valid image file.', { id: 'invalid-product-image' })
+    setImageError(null)
+
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!validTypes.includes(file.type)) {
+      setImageError('Please choose a JPEG, PNG or WebP image.')
       return
     }
 
-    setProcessingImage(true)
+    let processedFile = file
     try {
-      const nextUrl = await createPreviewImageUrl(file)
-      setValue('imageUrl', nextUrl, { shouldDirty: true, shouldValidate: true })
-      toast.success('Product image added to preview', { id: 'product-image-added' })
+      processedFile = await shrinkImageIfNeeded(file)
     } catch {
-      toast.error('Could not load the selected image.', { id: 'product-image-error' })
-    } finally {
-      setProcessingImage(false)
+      processedFile = file
+    }
+
+    if (processedFile.size > 2 * 1024 * 1024) {
+      setImageError('Image must be 2 MB or smaller.')
+      return
+    }
+
+    try {
+      const result = await uploadImageMutation.mutateAsync(processedFile)
+      setValue('imageUrl', result.url, { shouldDirty: true, shouldValidate: true })
+      setImageError(null)
+      toast.success('Image uploaded')
+    } catch (err) {
+      const parsed = parseApiError(err)
+      if (parsed.status !== 401 && parsed.status !== 403) {
+        setImageError(parsed.message)
+      }
     }
   }
 
   function handleClearImage() {
     setValue('imageUrl', '', { shouldDirty: true, shouldValidate: true })
+    setImageError(null)
   }
 
   async function onSubmit(values) {
@@ -285,63 +328,61 @@ export function ProductForm({
           />
         </div>
 
-        <div className="md:col-span-2 flex flex-col sm:flex-row gap-4 sm:items-start">
-          <div className="flex-1 space-y-2">
-            <Input
-              label="Image URL"
-              optional
-              placeholder="Paste image URL or upload from Preview"
-              helperText="Paste a direct image link or add an image from your device in the Preview."
-              error={errors.imageUrl?.message}
-              {...register('imageUrl', {
-                maxLength: {
-                  value: 500,
-                  message: 'Image URL must be 500 characters or less.',
-                },
-              })}
-            />
+        {/* Product image upload section */}
+        <div className="md:col-span-2 space-y-2">
+          <input type="hidden" {...register('imageUrl')} />
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-ink">
+              Product image <span className="font-normal text-muted">(optional)</span>
+            </span>
           </div>
 
-          <div className="shrink-0 space-y-2">
-            <p className="text-xs font-medium text-muted">Preview</p>
-            <div className="flex items-start gap-3">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                aria-label={imageUrlValue ? 'Change product image' : 'Add product image'}
-                className="group relative h-24 w-24 overflow-hidden rounded-[8px] border border-border hover:border-primary transition-colors cursor-pointer"
-              >
-                <ProductImage
-                  src={imageUrlValue}
-                  alt={nameValue || 'Product preview'}
-                  iconClassName="h-7 w-7"
-                />
-              </button>
+          <div className="sr-only" aria-live="polite">
+            {isUploadingImage ? 'Uploading image…' : ''}
+          </div>
 
-              <div className="flex flex-col gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageFileChange}
-                  className="sr-only"
-                  aria-label="Upload product image file"
-                />
+          <div className="flex flex-col sm:flex-row gap-5 items-start">
+            <div className="relative h-40 w-40 max-w-full rounded-[12px] border border-border bg-[#F5F5F4] overflow-hidden shrink-0 flex items-center justify-center">
+              <ProductImage
+                src={imageUrlValue}
+                alt={nameValue || 'Product preview'}
+                className="h-full w-full object-cover"
+                iconClassName="h-10 w-10 text-muted"
+              />
+              {isUploadingImage ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                  <Spinner className="h-8 w-8 text-white" />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="flex-1 space-y-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleImageFileChange}
+                className="sr-only"
+                aria-label="Upload product image file"
+              />
+
+              <div className="flex flex-wrap items-center gap-3">
                 <Button
                   type="button"
                   variant="secondary"
-                  size="sm"
-                  loading={processingImage}
+                  size="md"
+                  disabled={isSubmitting || isUploadingImage}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <ImagePlus className="h-4 w-4" aria-hidden="true" />
-                  <span>{imageUrlValue ? 'Change image' : 'Add image'}</span>
+                  <span>{imageUrlValue ? 'Change image' : 'Upload image'}</span>
                 </Button>
                 {imageUrlValue ? (
                   <Button
                     type="button"
                     variant="ghost"
-                    size="sm"
+                    size="md"
+                    disabled={isSubmitting || isUploadingImage}
                     onClick={handleClearImage}
                     className="text-danger hover:bg-danger-tint/40"
                   >
@@ -350,16 +391,35 @@ export function ProductForm({
                   </Button>
                 ) : null}
               </div>
+
+              <p className="text-sm text-muted">JPEG, PNG or WebP, up to 2 MB</p>
+
+              {imageError ? (
+                <div role="alert" className="flex items-center gap-1.5 text-sm text-danger mt-1">
+                  <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>{imageError}</span>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
 
       <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 border-t border-border pt-5">
-        <Button type="button" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onCancel}
+          disabled={isSubmitting || isUploadingImage}
+        >
           Cancel
         </Button>
-        <Button type="submit" variant="primary" loading={isSubmitting}>
+        <Button
+          type="submit"
+          variant="primary"
+          loading={isSubmitting}
+          disabled={isSubmitting || isUploadingImage}
+        >
           {isEdit ? 'Save changes' : 'Create product'}
         </Button>
       </div>

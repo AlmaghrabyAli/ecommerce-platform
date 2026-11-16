@@ -34,9 +34,24 @@ describe('Admin E2E journeys', () => {
       screen.getByLabelText('Category'),
       screen.getByRole('option', { name: 'Smart Home' }).value,
     )
+
+    // Upload an image while creating product
+    const fileInput = screen.getByLabelText('Upload product image file')
+    const imgFile = new File(['plug-image-data'], 'smart-plug.png', { type: 'image/png' })
+    await user.upload(fileInput, imgFile)
+    expect(await screen.findByText('Image uploaded')).toBeInTheDocument()
+
     await user.click(screen.getByRole('button', { name: 'Create product' }))
     expect(await screen.findByText('Product saved')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Edit product' })).toBeInTheDocument()
+
+    const createdProduct = testBackend.getDb().products.find((p) => p.name === 'Smart Plug WiFi')
+    expect(createdProduct).toBeTruthy()
+    expect(createdProduct.imageUrl).toMatch(/^http:\/\/localhost:5062\/api\/images\/\d+$/)
+    expect(await screen.findByRole('img', { name: 'Smart Plug WiFi' })).toHaveAttribute(
+      'src',
+      createdProduct.imageUrl,
+    )
 
     // Go to Orders -> open COD Pending order #3 -> advance to Delivered
     await user.click(within(adminNav).getByRole('link', { name: 'Orders' }))

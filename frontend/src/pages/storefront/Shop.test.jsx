@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
+import { Header } from '../../components/layout/Header.jsx'
 import { API_BASE } from '../../test/fixtures.js'
 import { renderWithProviders } from '../../test/renderWithProviders.jsx'
 import { server } from '../../test/server.js'
@@ -99,5 +100,39 @@ describe('Shop page', () => {
     fail = false
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByText('24 products')).toBeInTheDocument()
+  })
+
+  it('preserves and updates search query when submitted from Header search bar', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(
+      <div>
+        <Header />
+        <Shop />
+      </div>,
+      { route: '/shop' },
+    )
+
+    expect(await screen.findByRole('heading', { name: 'All products' })).toBeInTheDocument()
+
+    const headerInput = screen.getByLabelText('Search products')
+    await user.type(headerInput, 'Wireless')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    expect(await screen.findByRole('heading', { name: 'Results for "Wireless"' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Search: Wireless' })).toBeInTheDocument()
+
+    // Change search in Header while already on Shop
+    await user.clear(headerInput)
+    await user.type(headerInput, 'Keyboard')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    expect(await screen.findByRole('heading', { name: 'Results for "Keyboard"' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Search: Keyboard' })).toBeInTheDocument()
+
+    // Clear search from Header
+    await user.clear(headerInput)
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+
+    expect(await screen.findByRole('heading', { name: 'All products' })).toBeInTheDocument()
   })
 })

@@ -5,6 +5,7 @@ import {
   createAdminProductApi,
   deactivateAdminProductApi,
   deleteAdminCategoryApi,
+  deleteAdminProductApi,
   getAdminOrderByIdApi,
   getAdminOrdersApi,
   getAdminProductByIdApi,
@@ -13,6 +14,7 @@ import {
   updateAdminCategoryApi,
   updateAdminOrderStatusApi,
   updateAdminProductApi,
+  uploadProductImage,
 } from '../api/admin.js'
 import { parseApiError } from '../utils/errors.js'
 
@@ -48,8 +50,15 @@ export function useCreateAdminProduct() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'products'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
-      toast.success('Product saved', { id: 'product-saved' })
+      toast.success('Product saved')
     },
+  })
+}
+
+export function useUploadProductImage(options = {}) {
+  return useMutation({
+    mutationFn: uploadProductImage,
+    ...options,
   })
 }
 
@@ -63,7 +72,7 @@ export function useUpdateAdminProduct() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['product', updated.slug] })
-      toast.success('Product saved', { id: 'product-saved' })
+      toast.success('Product saved')
     },
   })
 }
@@ -77,6 +86,26 @@ export function useDeactivateAdminProduct() {
       queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
       toast.success('Product deactivated', { id: 'product-deactivated' })
+    },
+    onError: (err) => {
+      const parsed = parseApiError(err)
+      if (parsed.status !== 401 && parsed.status !== 403) {
+        toast.error(parsed.message, { id: `admin-prod-err-${parsed.message}`, duration: 6000 })
+      }
+    },
+  })
+}
+
+export function useDeleteAdminProduct() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: deleteAdminProductApi,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'products'] })
+      queryClient.invalidateQueries({ queryKey: ['admin', 'stats'] })
+      queryClient.invalidateQueries({ queryKey: ['products'] })
+      queryClient.invalidateQueries({ queryKey: ['categories'] })
+      toast.success('Product deleted', { id: 'product-deleted' })
     },
     onError: (err) => {
       const parsed = parseApiError(err)

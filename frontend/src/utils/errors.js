@@ -30,7 +30,8 @@ export function parseApiError(error) {
         continue
       }
       if (Array.isArray(messages) && messages.length > 0) {
-        fieldErrors[lowerFirst(key)] = String(messages[0])
+        const rawMsg = String(messages[0])
+        fieldErrors[lowerFirst(key)] = translateServerMessage(rawMsg, status)
       }
     }
 

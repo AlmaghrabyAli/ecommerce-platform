@@ -1,10 +1,36 @@
 import '@testing-library/jest-dom/vitest'
 import * as axeMatchers from 'vitest-axe/matchers'
+import { configure } from '@testing-library/dom'
 import { cleanup } from '@testing-library/react'
+import { File as NodeFile } from 'node:buffer'
 import toast from 'react-hot-toast'
 import { resetUnauthorizedGuard } from '../api/client.js'
 import { testBackend } from './handlers.js'
 import { server } from './server.js'
+
+if (NodeFile) {
+  try {
+    delete NodeFile.prototype[Symbol.for('nodejs.util.inspect.custom')]
+    const blobProto = typeof window !== 'undefined' && window.Blob ? window.Blob.prototype : globalThis.Blob?.prototype
+    if (blobProto) {
+      Object.setPrototypeOf(blobProto, NodeFile.prototype)
+      blobProto.stream = function () {
+        const self = this
+        return new ReadableStream({
+          async start(ctrl) {
+            const buf = await self.arrayBuffer()
+            ctrl.enqueue(new Uint8Array(buf))
+            ctrl.close()
+          },
+        })
+      }
+    }
+  } catch {
+    // ignore
+  }
+}
+
+configure({ asyncUtilTimeout: 5000 })
 
 expect.extend(axeMatchers)
 
@@ -32,12 +58,6 @@ if (typeof window !== 'undefined') {
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
     })
-  }
-  if (!URL.createObjectURL) {
-    URL.createObjectURL = vi.fn(() => 'blob:http://localhost:5173/test-preview')
-  }
-  if (!URL.revokeObjectURL) {
-    URL.revokeObjectURL = vi.fn()
   }
 }
 

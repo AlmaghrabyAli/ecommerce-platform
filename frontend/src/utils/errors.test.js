@@ -73,6 +73,42 @@ describe('parseApiError', () => {
     expect(parseApiError(authErr).message).toBe('Incorrect email or password.')
   })
 
+  it('translates empty-key "" validation error (Request body too large) to friendly message', () => {
+    const err = {
+      response: {
+        status: 400,
+        data: {
+          errors: {
+            '': [
+              'Failed to read the request form. Request body too large. The max request body size is 10485760 bytes.',
+            ],
+          },
+        },
+      },
+    }
+    const parsed = parseApiError(err)
+    expect(parsed.status).toBe(400)
+    expect(parsed.fieldErrors['']).toBe('Image must be 2 MB or smaller.')
+    expect(parsed.message).toBe('Image must be 2 MB or smaller.')
+  })
+
+  it('translates "file" field validation error to friendly image message', () => {
+    const err = {
+      response: {
+        status: 400,
+        data: {
+          errors: {
+            file: ['The file field is required.'],
+          },
+        },
+      },
+    }
+    const parsed = parseApiError(err)
+    expect(parsed.status).toBe(400)
+    expect(parsed.fieldErrors.file).toBe('Please choose an image file.')
+    expect(parsed.message).toBe('Please choose an image file.')
+  })
+
   it('handles empty 401, 403, 500, and unknown shapes cleanly', () => {
     expect(parseApiError({ response: { status: 401, data: '' } }).message).toBe(
       'Something went wrong. Please try again.',

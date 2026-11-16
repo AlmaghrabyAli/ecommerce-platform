@@ -31,6 +31,10 @@ export async function updateAdminProductApi({ id, ...payload }) {
   return data
 }
 
+export async function deleteAdminProductApi(id) {
+  await api.delete(`/admin/products/${id}`)
+}
+
 export async function deactivateAdminProductApi(id) {
   await api.delete(`/admin/products/${id}`)
 }
@@ -69,3 +73,13 @@ export async function updateAdminOrderStatusApi({ id, status }) {
   const { data } = await api.put(`/admin/orders/${id}/status`, { status })
   return data
 }
+
+export async function uploadProductImage(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { data } = await api.post('/admin/images', formData)
+  return data
+}
+
+export const uploadProductImageApi = uploadProductImage
+

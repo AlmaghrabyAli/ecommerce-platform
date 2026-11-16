@@ -223,10 +223,12 @@ function cloneInitialState() {
     carts: new Map(),
     invalidatedTokens: new Set(),
     forceCheckoutConflict: false,
+    images: [],
     nextUserId: 4,
     nextCategoryId: 9,
     nextProductId: 25,
     nextOrderId: 6,
+    nextImageId: 1,
   }
 }
 
@@ -807,11 +809,28 @@ export const handlers = [
     const user = getCurrentUser(request)
     if (!user) return new HttpResponse(null, { status: 401 })
     if (user.role !== 'Admin') return new HttpResponse(null, { status: 403 })
-    const product = db.products.find((p) => p.id === Number(params.id))
-    if (!product) return businessProblem(404, 'Product not found.')
-    product.isActive = false
-    product.versionCounter += 1
-    product.rowVersion = encodeRowVersion(product.id * 100 + product.versionCounter)
+    const productIndex = db.products.findIndex((p) => p.id === Number(params.id))
+    if (productIndex === -1) return businessProblem(404, 'Product not found.')
+    const product = db.products[productIndex]
+
+    const hasActiveOrders = db.orders.some((o) =>
+      o.status !== 'Cancelled' && o.items.some((item) => item.productId === product.id),
+    )
+    if (hasActiveOrders) {
+      return businessProblem(
+        409,
+        'Cannot delete a product that has active orders. Cancel the orders first or deactivate it.',
+      )
+    }
+
+    // Clean up items from cancelled orders
+    for (const order of db.orders) {
+      if (order.status === 'Cancelled') {
+        order.items = order.items.filter((item) => item.productId !== product.id)
+      }
+    }
+
+    db.products.splice(productIndex, 1)
     return new HttpResponse(null, { status: 204 })
   }),
 
@@ -1037,6 +1056,67 @@ export const handlers = [
       ordersByStatus,
       lowStockProducts,
       topProducts,
+    })
+  }),
+
+  // Admin Image Upload
+  http.post(`${API_BASE}/admin/images`, async ({ request }) => {
+    const user = getCurrentUser(request)
+    if (!user) return new HttpResponse(null, { status: 401 })
+    if (user.role !== 'Admin') return new HttpResponse(null, { status: 403 })
+
+    let formData
+    try {
+      formData = await request.formData()
+    } catch {
+      return validationProblem({
+        '': [
+          'Failed to read the request form. Request body too large. The max request body size is 10485760 bytes.',
+        ],
+      })
+    }
+
+    const file = formData.get('file')
+    if (!file || typeof file === 'string') {
+      return validationProblem({ file: ['The file field is required.'] })
+    }
+
+    if (file.size === 0) {
+      return businessProblem(400, 'The image file is empty.')
+    }
+
+    const type = file.type || ''
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp']
+    if (!validTypes.includes(type)) {
+      return businessProblem(400, 'Only JPEG, PNG or WebP images are allowed.')
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      return businessProblem(400, 'Image must be 2 MB or smaller.')
+    }
+
+    const id = db.nextImageId++
+    db.images.push({ id, file })
+    return HttpResponse.json(
+      {
+        id,
+        url: `http://localhost:5062/api/images/${id}`,
+      },
+      { status: 201 },
+    )
+  }),
+
+  // Public Image Retrieval
+  http.get(`${API_BASE}/images/:id`, ({ params }) => {
+    const id = Number(params.id)
+    const img = db.images?.find((i) => i.id === id)
+    if (!img) return businessProblem(404, 'Image not found.')
+    return new HttpResponse(new Uint8Array([1, 2, 3]), {
+      status: 200,
+      headers: {
+        'Content-Type': img.file?.type || 'image/png',
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      },
     })
   }),
 ]

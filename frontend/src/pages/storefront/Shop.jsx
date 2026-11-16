@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { useCategories } from '../../hooks/useCategories.js'
@@ -33,14 +33,21 @@ export function Shop() {
 
   const [searchInput, setSearchInput] = useState(urlSearch)
   const debouncedSearch = useDebounce(searchInput, 400)
+  const isTypingRef = useRef(false)
 
   useEffect(() => {
     setSearchInput(urlSearch)
+    isTypingRef.current = false
   }, [urlSearch])
 
   useEffect(() => {
+    if (!isTypingRef.current) return
     if (debouncedSearch !== searchInput) return
-    if (debouncedSearch.trim() === urlSearch.trim()) return
+    if (debouncedSearch.trim() === urlSearch.trim()) {
+      isTypingRef.current = false
+      return
+    }
+    isTypingRef.current = false
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
       if (debouncedSearch.trim()) {
@@ -117,6 +124,7 @@ export function Shop() {
   }
 
   function handleClearAll() {
+    isTypingRef.current = false
     setSearchInput('')
     setSearchParams(new URLSearchParams())
   }
@@ -134,6 +142,7 @@ export function Shop() {
       key: 'search',
       label: `Search: ${urlSearch}`,
       onRemove: () => {
+        isTypingRef.current = false
         setSearchInput('')
         updateParams((next) => {
           next.delete('search')
@@ -204,7 +213,10 @@ export function Shop() {
             id="shop-inline-search"
             type="search"
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(e) => {
+              isTypingRef.current = true
+              setSearchInput(e.target.value)
+            }}
             placeholder="Filter by name..."
             className="h-11 w-full rounded-[8px] border border-border-strong bg-surface pl-9 pr-3 text-base sm:text-sm text-ink placeholder:text-muted focus:border-primary"
           />

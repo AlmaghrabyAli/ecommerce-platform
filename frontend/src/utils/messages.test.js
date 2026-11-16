@@ -41,10 +41,24 @@ describe('messages translation table', () => {
       'Cannot delete a category that still has products.',
       "This category still has products (including inactive ones), so it can't be deleted.",
     ],
+    ['Only JPEG, PNG or WebP images are allowed.', 'Only JPEG, PNG or WebP images are allowed.'],
+    ['Image must be 2 MB or smaller.', 'Image must be 2 MB or smaller.'],
+    ['The image file is empty.', 'The selected file is empty.'],
+    ['The file field is required.', 'Please choose an image file.'],
+    ['Image not found.', 'This image could not be found.'],
   ]
 
   it.each(exactCases)('translates "%s"', (raw, expected) => {
     expect(translateServerMessage(raw, 400)).toBe(expected)
+  })
+
+  it('translates "Request body too large…" pattern to 2 MB friendly message', () => {
+    expect(
+      translateServerMessage(
+        'Failed to read the request form. Request body too large. The max request body size is 10485760 bytes.',
+        400,
+      ),
+    ).toBe('Image must be 2 MB or smaller.')
   })
 
   it('translates "Only {n} item(s) in stock."', () => {
