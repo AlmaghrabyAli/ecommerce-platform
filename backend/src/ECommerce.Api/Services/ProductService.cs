@@ -1,4 +1,4 @@
-using ECommerce.Api.Data;
+﻿using ECommerce.Api.Data;
 using ECommerce.Api.Dtos;
 using ECommerce.Api.Entities;
 using ECommerce.Api.Exceptions;
@@ -150,9 +150,16 @@ public class ProductService : IProductService
         var product = await _db.Products.FirstOrDefaultAsync(p => p.Id == id)
             ?? throw new NotFoundException("Product not found.");
 
-        // Soft delete: keep the row so old orders stay valid.
-        product.IsActive = false;
-        product.UpdatedAt = DateTime.UtcNow;
+        // A product that appears in any order (even a cancelled one) is part of the order history,
+        // so it is never deleted and the order items are never touched. Deactivate it instead.
+        var hasOrders = await _db.OrderItems.AnyAsync(oi => oi.ProductId == id);
+        if (hasOrders)
+            throw new ConflictException("This product has orders and cannot be deleted. Deactivate it instead.");
+
+        // Carts only hold temporary choices, so they are cleaned up.
+        var cartItems = await _db.CartItems.Where(ci => ci.ProductId == id).ToListAsync();
+        _db.CartItems.RemoveRange(cartItems);
+        _db.Products.Remove(product);
 
         try
         {
@@ -161,6 +168,11 @@ public class ProductService : IProductService
         catch (DbUpdateConcurrencyException)
         {
             throw new ConflictException("This product was changed by someone else. Reload it and try again.");
+        }
+        catch (DbUpdateException)
+        {
+            // For example an order was placed for this product between the check above and the delete.
+            throw new ConflictException("This product is in use and cannot be deleted. Deactivate it instead.");
         }
     }
 
