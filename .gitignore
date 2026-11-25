@@ -23,3 +23,6 @@ appsettings.Local.json
 Thumbs.db
 .DS_Store
 .vscode/
+
+scripts/demo-run/
+scripts/product-images/
